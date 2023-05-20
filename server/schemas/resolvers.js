@@ -1,71 +1,88 @@
-const { AuthenticationError } = require("apollo-server-express");
 const { User } = require("../models");
+const { AuthenticationError } = require("apollo-server-express");
 const { signToken } = require("../utils/auth");
-const { update } = require("../models/User");
 
 const resolvers = {
   Query: {
     me: async (parent, args, context) => {
       if (context.user) {
-        const user = await User.findOne({ _id: context.user._id }).select(
-          "-__v -password"
-        );
-        return user;
+        try {
+          const userData = await User.findOne({
+            _id: context.user._id,
+          })
+            .select("-__v-password")
+            .populate("books");
+
+          return userData;
+        } catch (err) {
+          console.log(err);
+        }
       }
-      throw new AuthenticationError("You need to be logged in first!");
+      throw new AuthenticationError("Log in first");
     },
   },
 
   Mutation: {
-    login: async (parent, { email, password }) => {
-      const user = await User.findOne({ email });
-
-      if (!user) {
-        throw new AuthenticationError("No user with this email found");
+    addUser: async (parent, args) => {
+      try {
+        const user = await User.create(args);
+        const token = signToken(user);
+        return { token, user };
+      } catch (err) {
+        console.log(err);
       }
+    },
 
-      const correctPw = await user.isCorrectPassword(password);
+    loginUser: async (parent, { email, password }) => {
+      try {
+        const user = await User.findOne({ email });
+        if (!user) {
+          throw new AuthenticationError("Invalid Login");
+        }
+        const correctPassword = await user.isCorrectPassword(password);
 
-      if (!correctPw) {
-        throw new AuthenticationError("Incorrect Credentials");
+        if (!correctPassword) {
+          throw new AuthenticationError("Invalid Login");
+        }
+
+        const token = signToken(user);
+        return { token, user };
+      } catch (err) {
+        console.log(err);
       }
-
-      const token = signToken(user);
-      return { token, user };
     },
-    addUser: async (parent, { username, email, password }) => {
-      const user = await User.create({
-        username,
-        email,
-        password,
-      });
-      const token = signToken(user);
 
-      return { token, user };
-    },
-    saveBook: async (parent, { input }, context) => {
+    saveBook: async (parent, args, context) => {
       if (context.user) {
-        const updatedUser = User.findOneAndUpdate(
-          { _id: context.userId },
-          { $addToSet: { savedBooks: input } },
-          { new: true, runValidators: true }
-        );
-        return updatedUser;
+        try {
+          const updatedUser = await User.findOneAndUpdate(
+            { _id: context.user._id },
+            { $addToSet: { savedBooks: args.input } },
+            { new: true, runValidators: true }
+          );
+          return updatedUser;
+        } catch (err) {
+          console.log(err);
+        }
       }
-      throw new AuthenticationError("You need to be logged in first!");
+      throw new AuthenticationError("Unable to save book");
     },
-    removeBook: async (parent, { bookId }, context) => {
+
+    removeBook: async (parent, args, context) => {
       if (context.user) {
-        const updatedUser = User.findOneAndUpdate(
-          { _id: context.user._id },
-          { $pull: { savedBooks: savedBook } },
-          { new: true }
-        );
-        return updatedUser;
+        try {
+          const updatedUser = await User.findOneAndUpdate(
+            { _id: context.user._id },
+            { $pull: { savedBooks: { bookId: args.bookId } } },
+            { new: true }
+          );
+          return updatedUser;
+        } catch (err) {
+          console.log(err);
+        }
       }
-      throw new AuthenticationError("You need to be logged in First!");
+      throw new AuthenticationError("Unable to delete book");
     },
   },
 };
-
 module.exports = resolvers;

@@ -73,8 +73,9 @@ module.exports = {
       { new: true }
     );
     if (!updatedUser) {
-      // return res.status(404).json({ message: "Couldn't find user with this id!" });
-      return updatedUser;
+      return res
+        .status(404)
+        .json({ message: "Couldn't find user with this id!" });
     }
     return res.json(updatedUser);
   },
